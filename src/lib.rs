@@ -1,10 +1,10 @@
 #![feature(if_let)]
 #![feature(slicing_syntax)]
 
-//pub use parser::parse;
+pub use parser::parse;
 
 pub mod lexer;
-//pub mod parser;
+pub mod parser;
 
 #[deriving(Clone, Show, PartialEq, Eq)]
 pub struct Span {
