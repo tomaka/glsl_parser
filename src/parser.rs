@@ -1,12 +1,26 @@
 use {Span, Spanned};
 use lexer::{mod, Lexer, Token};
 
-#[deriving(Show, Clone)]
+#[deriving(Clone)]
 pub enum ParseError {
     UnexpectedEndOfFile,
 
     /// An unexpected token has been encountered.
     UnexpectedToken(Spanned<Token>, String),
+}
+
+impl ::std::fmt::Show for ParseError {
+    fn fmt(&self, formatter: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::FormatError> {
+        match self {
+            &UnexpectedEndOfFile => {
+                "unexpected end of file".fmt(formatter)
+            },
+            &UnexpectedToken(ref loc, ref expect) => {
+                (format!("unexpected token `{}` at line {}:{}, expected {} instead",
+                    loc.content, loc.start.line, loc.start.offset, expect)).fmt(formatter)
+            }
+        }
+    }
 }
 
 #[deriving(Show, Clone)]
