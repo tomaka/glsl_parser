@@ -1,6 +1,5 @@
 use {Span, Spanned};
 use lexer::{mod, Lexer, Token};
-use std::iter::Peekable;
 
 #[deriving(Show, Clone)]
 pub enum ParseError {
@@ -180,16 +179,26 @@ pub enum BinaryOperation {
 }
 
 pub fn parse<R: Reader>(data: R) -> Result<TranslationUnit, ParseError> {
-    Parser {
-        lexer: Lexer::new(data).peekable(),
-    }.parse_translation_unit()
+    let mut parser = Parser {
+        lexer: Lexer::new(data),
+        next_token: None,
+    };
+
+    try!(parser.read_next());
+    parser.parse_translation_unit()
 }
 
 struct Parser<R> {
-    lexer: Peekable<Spanned<Token>, Lexer<R>>,
+    lexer: Lexer<R>,
+    next_token: Option<Spanned<Token>>,
 }
 
 impl<R: Reader> Parser<R> {
+    fn read_next(&mut self) -> Result<(), ParseError> {
+        self.next_token = self.lexer.next();
+        Ok(())
+    }
+
     fn parse_translation_unit(&mut self) -> Result<TranslationUnit, ParseError> {
         let mut result = Vec::new();
 
@@ -206,8 +215,8 @@ impl<R: Reader> Parser<R> {
     fn parse_external_declaration(&mut self) -> Result<Option<ExternalDeclaration>, ParseError> {
         self.skip_whitespaces();
 
-        let token = match self.lexer.peek() {
-            Some(token) => token.clone(),
+        let token = match self.next_token {
+            Some(ref token) => token.clone(),
             None => return Ok(None),
         };
 
@@ -221,20 +230,20 @@ impl<R: Reader> Parser<R> {
 
         match (try!(self.peek())).content {
             lexer::SemiColon => {
-                self.lexer.next();
+                try!(self.read_next());
                 return Ok(Some(ExternalDeclarationDeclaration(
                     DeclarationVariable(ty, name, None)
                 )));
             },
             lexer::LeftParenthesis => {
-                self.lexer.next();
+                try!(self.read_next());
                 // TODO: function parameters
                 try!(self.expect_token(lexer::RightParenthesis));
                 self.skip_whitespaces();
 
                 match (try!(self.peek())).content {
                     lexer::LeftBrace => {
-                        self.lexer.next();
+                        try!(self.read_next());
                         self.skip_whitespaces();
                         let body = try!(self.parse_statements_list());
                         self.skip_whitespaces();
@@ -246,7 +255,7 @@ impl<R: Reader> Parser<R> {
                         )));
                     },
                     lexer::SemiColon => {
-                        self.lexer.next();
+                        try!(self.read_next());
                         return Ok(Some(ExternalDeclarationDeclaration(
                             DeclarationFunction(FunctionDeclaration(ty, name, Vec::new()))
                         )));
@@ -261,8 +270,8 @@ impl<R: Reader> Parser<R> {
     }
 
     fn peek(&mut self) -> Result<Spanned<Token>, ParseError> {
-        match self.lexer.peek() {
-            Some(token) => Ok(token.clone()),
+        match self.next_token {
+            Some(ref token) => Ok(token.clone()),
             None => Err(UnexpectedEndOfFile),
         }
     }
@@ -271,7 +280,7 @@ impl<R: Reader> Parser<R> {
         let token = try!(self.peek());
 
         if let lexer::Whitespace(_) = token.content {
-            self.lexer.next();
+            try!(self.read_next());
             return Ok(());
         } else {
             return Err(UnexpectedToken(token.clone(), format!("whitespace")));
@@ -280,13 +289,13 @@ impl<R: Reader> Parser<R> {
 
     fn skip_whitespaces(&mut self) {
         loop {
-            let token = match self.lexer.peek() {
-                Some(token) => token.clone(),
+            let token = match self.next_token {
+                Some(ref token) => token.clone(),
                 None => return,
             };
 
             if let lexer::Whitespace(_) = token.content {
-                self.lexer.next();
+                self.read_next();
             } else {
                 break;
             }
@@ -298,7 +307,7 @@ impl<R: Reader> Parser<R> {
 
         if let lexer::Identifier(ref id) = token.content {
             let val = Ok(id.clone());
-            self.lexer.next();
+            try!(self.read_next());
             val
         } else {
             Err(UnexpectedToken(token.clone(), format!("identifier")))
@@ -328,7 +337,7 @@ impl<R: Reader> Parser<R> {
                 _ => break
             }
 
-            self.lexer.next();
+            try!(self.read_next());
             self.expect_whitespace();
         }
 
@@ -342,7 +351,7 @@ impl<R: Reader> Parser<R> {
             _ => return Err(UnexpectedToken(token, format!("type")))
         };
 
-        self.lexer.next();
+        try!(self.read_next());
 
         Ok(FullySpecifiedType {
             ty: ty,
@@ -359,7 +368,7 @@ impl<R: Reader> Parser<R> {
 
         let expression = match token.content {
             lexer::Plus | lexer::Dash | lexer::Bang | lexer::Increment | lexer::Decrement => {
-                self.lexer.next();
+                try!(self.read_next());
 
                 let op = match token.content {
                     lexer::Plus => UnaryOperationPlus,
@@ -374,23 +383,23 @@ impl<R: Reader> Parser<R> {
                 ExpressionUnaryOperation(op, box expr)
             },
             lexer::Identifier(ref id) => {
-                self.lexer.next();
+                try!(self.read_next());
                 ExpressionIdentifier(id.clone())
             },
             _ => return Err(UnexpectedToken(token.clone(), format!("expression")))
         };
 
-        match self.lexer.peek().map(|e| e.clone()) {
+        match self.next_token.as_ref().map(|e| e.clone()) {
             Some(ref a) if a.content == lexer::Increment => {
-                self.lexer.next();
+                try!(self.read_next());
                 Ok(ExpressionUnaryOperation(UnaryOperationPostInc, box expression))
             },
             Some(ref a) if a.content == lexer::Decrement => {
-                self.lexer.next();
+                try!(self.read_next());
                 Ok(ExpressionUnaryOperation(UnaryOperationPostDec, box expression))
             },
             Some(ref a) if a.content == lexer::LeftParenthesis => {
-                self.lexer.next();
+                try!(self.read_next());
                 unimplemented!()
             },
             _ => Ok(expression),
@@ -399,7 +408,7 @@ impl<R: Reader> Parser<R> {
 
     fn parse_statements_list(&mut self) -> Result<Vec<Statement>, ParseError> {
         let mut result = Vec::new();
-        while self.lexer.peek().map(|e| e.content.clone()) != Some(lexer::RightBrace) {
+        while self.next_token.as_ref().map(|e| e.content.clone()) != Some(lexer::RightBrace) {
             result.push(try!(self.parse_statement()));
             self.skip_whitespaces();
         }
@@ -411,29 +420,29 @@ impl<R: Reader> Parser<R> {
 
         match token.content {
             lexer::LeftBrace => {
-                self.lexer.next();
+                try!(self.read_next());
                 let list = try!(self.parse_statements_list());
                 try!(self.expect_token(lexer::RightBrace));
                 Ok(StatementScope(list))
             },
             lexer::Continue => {
-                self.lexer.next();
+                try!(self.read_next());
                 try!(self.expect_semicolon());
                 Ok(StatementContinue)
             },
             lexer::Break => {
-                self.lexer.next();
+                try!(self.read_next());
                 try!(self.expect_semicolon());
                 Ok(StatementBreak)
             },
             lexer::Return => {
-                self.lexer.next();
+                try!(self.read_next());
                 let expr = try!(self.parse_expression());
                 try!(self.expect_semicolon());
                 Ok(StatementReturn(expr))
             },
             lexer::Discard => {
-                self.lexer.next();
+                try!(self.read_next());
                 try!(self.expect_semicolon());
                 Ok(StatementDiscard)
             },
@@ -448,11 +457,17 @@ impl<R: Reader> Parser<R> {
     }
 
     fn expect_token(&mut self, token: Token) -> Result<(), ParseError> {
-        match self.lexer.next() {
+        let val = match self.next_token {
             None => Err(UnexpectedEndOfFile),
             Some(ref a) if a.content == token => Ok(()),
-            Some(a) => Err(UnexpectedToken(a.clone(), token.to_string())),
+            Some(ref a) => Err(UnexpectedToken(a.clone(), token.to_string())),
+        };
+
+        if val.is_ok() {
+            try!(self.read_next());
         }
+
+        val
     }
 }
 
