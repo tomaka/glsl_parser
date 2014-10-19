@@ -5,6 +5,7 @@ pub use parser::parse;
 
 pub mod lexer;
 pub mod parser;
+pub mod preprocessor;
 
 #[deriving(Clone, Show, PartialEq, Eq)]
 pub struct Span {

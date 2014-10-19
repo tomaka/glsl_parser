@@ -82,8 +82,6 @@ pub enum Token {
     Slash,
     /// `%`
     Percent,
-    /// '#'
-    Sharp,
 
     /// `<`
     LeftAngle,
@@ -201,7 +199,6 @@ impl ::std::fmt::Show for Token {
             Star => "*".fmt(formatter),
             Slash => "/".fmt(formatter),
             Percent => "%".fmt(formatter),
-            Sharp => "#".fmt(formatter),
 
             LeftAngle => "<".fmt(formatter),
             RightAngle => ">".fmt(formatter),
@@ -468,7 +465,6 @@ fn parse_symbol(buffer: &[u8]) -> Option<Token> {
         b"*" => Some(Star),
         b"/" => Some(Slash),
         b"%" => Some(Percent),
-        b"#" => Some(Sharp),
 
         b"<" => Some(LeftAngle),
         b">" => Some(RightAngle),

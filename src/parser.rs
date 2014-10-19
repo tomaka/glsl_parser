@@ -37,6 +37,8 @@ pub enum ExternalDeclaration {
 pub enum Declaration {
     DeclarationVariable(FullySpecifiedType, String, Option<Expression>),
     DeclarationFunction(FunctionDeclaration),
+    /// `precision $2 $1;`
+    DeclarationPrecisionQualifier(Type, PrecisionQualifier),
 }
 
 #[deriving(Show, Clone)]
@@ -233,10 +235,6 @@ impl<R: Reader> Parser<R> {
             Some(ref token) => token.clone(),
             None => return Ok(None),
         };
-
-        if token.content == lexer::Sharp {
-            unimplemented!()
-        }
 
         let ty = try!(self.parse_fully_specified_type());
         try!(self.expect_whitespace());
